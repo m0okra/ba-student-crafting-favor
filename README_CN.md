@@ -79,7 +79,7 @@ python favor_calc.py [-h] [-n STUDENT_OPT] [-l LANG] [-r REGION] [-o] [student]
 | `student` | 学生名（位置参数，可省略前缀直接传入） |
 | `-n`, `--name` | 学生名（命名参数，与位置参数等效） |
 | `-l`, `--lang` | 名称显示语言，如 `cn` `en` `jp` `kr` `th` `tw` `zh`（默认：`cn`） |
-| `-r`, `--region` | 节点概率区域，如 `Cn` `En` `Jp` `Kr` `Th` `Tw` `Zh`（默认：`Cn`） |
+| `-r`, `--region` | 节点概率区域，如 `Cn` `Jp` `Global`（默认：`Cn`） |
 | `-o`, `--output` | 启用后将完整计算结果输出为 JSON 文件 |
 | `-h`, `--help` | 显示帮助信息 |
 

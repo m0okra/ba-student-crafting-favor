@@ -79,7 +79,7 @@ python favor_calc.py [-h] [-n STUDENT_OPT] [-l LANG] [-r REGION] [-o] [student]
 | `student` | Student name (positional argument; can omit the prefix) |
 | `-n`, `--name` | Student name (named argument, equivalent to positional) |
 | `-l`, `--lang` | Display language, e.g. `cn` `en` `jp` `kr` `th` `tw` `zh` (default: `cn`) |
-| `-r`, `--region` | Node probability region, e.g. `Cn` `En` `Jp` `Kr` `Th` `Tw` `Zh` (default: `Cn`) |
+| `-r`, `--region` | Node probability region, e.g. `Cn` `Jp` `Global` (default: `Cn`) |
 | `-o`, `--output` | When set, outputs full calculation results as a JSON file |
 | `-h`, `--help` | Show help message |
 

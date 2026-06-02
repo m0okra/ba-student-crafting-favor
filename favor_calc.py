@@ -169,7 +169,7 @@ def build_node_gift_map(crafting, gift_groups):
             "NameZh": node.get("NameZh", ""),
             "tier": node["Tier"],
             "quality": node["Quality"],
-            "node_chance": node.get(CHANCE_FIELD, node.get("ChanceJp", 0)),
+            "node_chance": node[CHANCE_FIELD],
             "chance_jp": node.get("ChanceJp", 0),
             "total_weight": node_total_weight,
             "gift_groups": [
@@ -379,6 +379,7 @@ def print_results(student_data, node_results, name_index):
     print(f"  Names: {names_line}")
     print(f"  FavorItemTags: [{favor_str}]")
     print(f"  FavorItemUniqueTags: [{unique_str}]")
+    print(f"  Chance Region: {CHANCE_REGION}")
     print()
 
     total_expected = 0.0
@@ -464,6 +465,10 @@ Examples:
     CHANCE_FIELD = f"Chance{CHANCE_REGION}"
 
     crafting, groups, items, students_jp, students_all = load_all_data()
+    if not any(CHANCE_FIELD in node for node in crafting["Nodes"]):
+        CHANCE_FIELD = "ChanceJp"
+        CHANCE_REGION = "Jp"
+
     name_index = build_name_index()
     item_name_index = build_item_name_index()
     favor_items, gift_groups = build_gift_data(items, groups, item_name_index)
