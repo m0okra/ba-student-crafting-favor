@@ -1,2 +1,5 @@
 data/
 __pycache__/
+
+# Ignore favor_calc generated JSON output
+favor_*.json

@@ -12,6 +12,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 NAME_LANGUAGE = "cn"
 CHANCE_REGION = "Cn"
 OUTPUT_JSON = False
+P_REACH_MAX = 0.5
 
 REGIONS = ["cn", "en", "jp", "kr", "th", "tw", "zh"]
 NAME_XX_MAP = {
@@ -125,16 +126,23 @@ def build_gift_data(items, groups, item_name_index):
     for gid_str, gdata in groups.items():
         gid = int(gid_str)
         favor_list = []
-        for item in gdata.get("Items", []):
+        group_items = gdata.get("Items", [])
+        group_total = len(group_items)
+        for item in group_items:
             iid = str(item["Id"])
             if iid in favor_items and item.get("Type") == "Item":
+                amt_min = item.get("AmountMin", 1)
+                amt_max = item.get("AmountMax", 1)
                 favor_list.append({
                     "item_id": iid,
                     "name": get_item_display_name(iid, item_name_index),
                     "rarity": favor_items[iid].get("Rarity", ""),
                     "exp_value": favor_items[iid].get("ExpValue", 0),
                     "tags": list(favor_items[iid].get("Tags", [])),
-                    "chance": item.get("Chance", 0),
+                    "chance": 1.0 / group_total,
+                    "amount_min": amt_min,
+                    "amount_max": amt_max,
+                    "amount_expected": amt_min + (amt_max - amt_min) * P_REACH_MAX,
                 })
         if favor_list:
             gift_groups[gid] = favor_list
@@ -257,13 +265,14 @@ def calc_node_expected(node, student):
 
         for item in gg["items"]:
             mult = calc_multiplier(item["tags"], student_favor_tags, student_unique_tags, item["rarity"])
-            contrib = item["chance"] * item["exp_value"] * mult
+            contrib = item["chance"] * item["exp_value"] * item["amount_expected"] * mult
             group_raw += contrib
             item_details.append({
                 "item_id": item["item_id"],
                 "name": item["name"],
                 "rarity": item["rarity"],
                 "exp_value": item["exp_value"],
+                "amount": item["amount_expected"],
                 "multiplier": mult,
                 "item_prob": item["chance"],
                 "expected_contribution": round(contrib, 6),
@@ -303,7 +312,7 @@ def calc_node_expected(node, student):
     return result
 
 
-def save_json_output(student, node_results, name_index):
+def save_json_output(student, node_results, name_index, mc_total):
     output = {
         "timestamp": int(time.time()),
         "config": {
@@ -321,6 +330,7 @@ def save_json_output(student, node_results, name_index):
         },
         "nodes": [],
         "total_expected": 0.0,
+        "mc_total": round(mc_total, 6),
     }
 
     for nr in node_results:
@@ -330,8 +340,10 @@ def save_json_output(student, node_results, name_index):
             "tier": nr["tier"],
             "quality": nr["quality"],
             "chance": nr["chance"],
+            "selection_prob": nr.get("selection_prob", 0.0),
             "node_raw": nr["node_raw"],
             "expected_value": nr["expected_value"],
+            "mc_expected": nr.get("mc_expected", 0.0),
             "groups": [],
         }
 
@@ -346,7 +358,7 @@ def save_json_output(student, node_results, name_index):
             node_data["groups"].append(group_data)
 
         output["nodes"].append(node_data)
-        output["total_expected"] += nr["expected_value"]
+        output["total_expected"] += nr["mc_expected"]
 
     output["total_expected"] = round(output["total_expected"], 6)
 
@@ -358,7 +370,7 @@ def save_json_output(student, node_results, name_index):
     return path
 
 
-def print_results(student_data, node_results, name_index):
+def print_results(student_data, node_results, name_index, mc_total):
     sid = student_data[0]
     sdata = student_data[1]
 
@@ -382,33 +394,81 @@ def print_results(student_data, node_results, name_index):
     print(f"  Chance Region: {CHANCE_REGION}")
     print()
 
-    total_expected = 0.0
-    for nr in node_results:
-        total_expected += nr["expected_value"]
-
     h_node = "Node"
     h_name = "Name"
     h_tq = "T/Q"
-    h_chance = "Chance"
+    h_sel = "Sel%"
     h_raw = "Raw"
-    h_final = "Final"
+    h_final = "Expected"
 
-    sep = f"{'':-<6} {'':-<30} {'':-<5} {'':->8} {'':->8} {'':->8}"
-    header = f"{h_node:<6} {cjk_ljust(h_name, 30)} {h_tq:<5} {h_chance:>8} {h_raw:>8} {h_final:>8}"
+    sep = f"{'':-<6} {'':-<30} {'':-<5} {'':->7} {'':->8} {'':->8}"
+    header = f"{h_node:<6} {cjk_ljust(h_name, 30)} {h_tq:<5} {h_sel:>7} {h_raw:>8} {h_final:>8}"
     print(header)
     print(sep)
 
     for nr in node_results:
+        sel_p = nr.get("selection_prob", 0.0)
         node_name = get_node_display_name(nr)
-        line = f"{nr['node_id']:<6} {cjk_ljust(node_name, 30)} T{nr['tier']}Q{nr['quality']:<2} {nr['chance']*100:>7.2f}% {nr['node_raw']:>8.4f} {nr['expected_value']:>8.4f}"
+        line = f"{nr['node_id']:<6} {cjk_ljust(node_name, 30)} T{nr['tier']}Q{nr['quality']:<2} {sel_p*100:>6.2f}% {nr['node_raw']:>8.4f} {nr['mc_expected']:>8.4f}"
         print(line)
 
     print(sep)
-    print(f"{'':<6} {cjk_ljust('', 30)} {'':<5} {'':>8} {'':>8} {total_expected:>8.4f}")
+    print(f"{'':<6} {cjk_ljust('', 30)} {'':<5} {'':>7} {'':>8} {mc_total:>8.4f}")
     print()
 
-    print(f"TOTAL EXPECTED FAVOR: {total_expected:.4f}")
+    print(f"TOTAL EXPECTED FAVOR: {mc_total:.4f}")
     print()
+
+
+def exact_expected(all_nodes, node_raw_map, chance_field):
+    """Calculate exact expected value per round using independent appearance model.
+    
+    Each node independently appears with probability = chance_field value.
+    Among appearing nodes, pick the one with highest raw value.
+    For same-raw nodes, first-in-list (by sorted order) wins.
+    """
+    probs = [n.get(chance_field, n.get("ChanceJp", 0)) for n in all_nodes]
+    raw_values = [node_raw_map.get(n["Id"], 0.0) for n in all_nodes]
+    node_ids = [n["Id"] for n in all_nodes]
+
+    indexed = list(zip(node_ids, probs, raw_values))
+    indexed.sort(key=lambda x: (-x[2], -x[1]))
+
+    sorted_ids = [x[0] for x in indexed]
+    sorted_probs = [x[1] for x in indexed]
+    sorted_raws = [x[2] for x in indexed]
+    N = len(sorted_probs)
+
+    node_sel_prob = {nid: 0.0 for nid in node_ids}
+    total = 0.0
+
+    cum_no_high = 1.0
+    i = 0
+    while i < N:
+        j = i
+        while j < N and sorted_raws[j] == sorted_raws[i]:
+            j += 1
+
+        raw = sorted_raws[i]
+        if raw <= 0:
+            i = j
+            continue
+
+        for k in range(i, j):
+            p_k = sorted_probs[k]
+            no_high_factor = cum_no_high
+            for kk in range(i, k):
+                no_high_factor *= (1 - sorted_probs[kk])
+            sel_prob = p_k * no_high_factor
+            node_sel_prob[sorted_ids[k]] = sel_prob
+            total += raw * sel_prob
+
+        for k in range(i, j):
+            cum_no_high *= (1 - sorted_probs[k])
+
+        i = j
+
+    return total, node_sel_prob
 
 
 def main():
@@ -507,11 +567,30 @@ Examples:
 
     node_results.sort(key=lambda r: (-r["tier"], -r["node_raw"]))
 
-    print_results((sid, sdata), node_results, name_index)
+    node_raw_map = {nr["node_id"]: nr["node_raw"] for nr in node_results}
+
+    tiers = {1: [], 2: [], 3: []}
+    for node in crafting["Nodes"]:
+        if node.get("Tier") in tiers:
+            tiers[node["Tier"]].append(node)
+
+    mc_total = 0.0
+    node_sel_prob = {}
+    for tier, nodes in tiers.items():
+        t_total, t_sel = exact_expected(nodes, node_raw_map, CHANCE_FIELD)
+        mc_total += t_total
+        node_sel_prob.update(t_sel)
+
+    for nr in node_results:
+        sel_p = node_sel_prob.get(nr["node_id"], 0.0)
+        nr["selection_prob"] = sel_p
+        nr["mc_expected"] = nr["node_raw"] * sel_p
+
+    print_results((sid, sdata), node_results, name_index, mc_total)
 
     if not OUTPUT_JSON:
         return
-    json_path = save_json_output((sid, sdata), node_results, name_index)
+    json_path = save_json_output((sid, sdata), node_results, name_index, mc_total)
     print(f"Full results saved to: {json_path}")
 
 
