@@ -425,7 +425,7 @@ def exact_expected(all_nodes, node_raw_map, chance_field):
     
     Each node independently appears with probability = chance_field value.
     Among appearing nodes, pick the one with highest raw value.
-    For same-raw nodes, first-in-list (by sorted order) wins.
+    Nodes with the same raw value within a tier share equal selection probability.
     """
     probs = [n.get(chance_field, n.get("ChanceJp", 0)) for n in all_nodes]
     raw_values = [node_raw_map.get(n["Id"], 0.0) for n in all_nodes]
@@ -454,17 +454,20 @@ def exact_expected(all_nodes, node_raw_map, chance_field):
             i = j
             continue
 
+        prod_no_group = 1.0
         for k in range(i, j):
-            p_k = sorted_probs[k]
-            no_high_factor = cum_no_high
-            for kk in range(i, k):
-                no_high_factor *= (1 - sorted_probs[kk])
-            sel_prob = p_k * no_high_factor
-            node_sel_prob[sorted_ids[k]] = sel_prob
-            total += raw * sel_prob
+            prod_no_group *= (1 - sorted_probs[k])
+        p_any_in_group = 1.0 - prod_no_group
+        p_group_sel = cum_no_high * p_any_in_group
+
+        group_size = j - i
+        sel_per_node = p_group_sel / group_size if group_size > 0 else 0.0
 
         for k in range(i, j):
-            cum_no_high *= (1 - sorted_probs[k])
+            node_sel_prob[sorted_ids[k]] = sel_per_node
+        total += raw * p_group_sel
+
+        cum_no_high *= prod_no_group
 
         i = j
 
